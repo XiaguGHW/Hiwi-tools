@@ -1,0 +1,43 @@
+# Excel 项目页着色宏（Farben_Makros）
+
+给 Controlling 工作簿里的项目页（Projektbericht）统一上色。半自动：选中一个区块，按快捷键。
+不需要安装任何软件，只用 Excel 自带的 VBA。
+
+## 颜色规则
+
+| 快捷键 | 区块 | 颜色 |
+|---|---|---|
+| Strg+Umschalt+K | 蓝色标题行（Gesamtbudget、IST Ausgaben、PLAN …） | Blau, Akzent 5, heller 60 %，Frutiger，加粗 |
+| Strg+Umschalt+B | Gesamtbudget 下三行、gesamt 行、O 列绿色部分 | Grün, Akzent 6, heller 60 % |
+| Strg+Umschalt+O | Obligo 下面的色块 | Blau, Akzent 1, heller 60 % |
+| Strg+Umschalt+I | IST 下面的色块 | Orange, Akzent 2, heller 60 % |
+| Strg+Umschalt+P | PLAN 下面的色块 | Gold, Akzent 4, heller 60 % |
+| Strg+Umschalt+R | IST Vorjahre … Projektende（从 A 列选到金额列） | 左侧 Weiß, Hintergrund 1, dunkler 15 %；金额列 Grün, Akzent 6, heller 60 % |
+
+第一大块（Projektbericht 到灰色表头结束）不变。
+
+## 安装（只做一次）
+
+1. 新建空白工作簿，按 **Alt+F11** 打开 VBA 编辑器（打不开说明宏被禁用）。
+2. **Datei → Datei importieren…** 选 `Farben_Makros.bas`；或 **Einfügen → Modul**，把文件第一行之后的内容粘贴进去。
+3. 另存为 `Farben_Makros.xlsm`（Excel-Arbeitsmappe mit Makros）。
+
+## 使用
+
+1. **先给要改的工作簿另存一个副本。宏的修改不能用 Strg+Z 撤销。**
+2. 打开 `Farben_Makros.xlsm`（出现提示条时点 “Inhalt aktivieren”），再打开要改的工作簿。
+3. **Alt+F8** 运行 `Tastenkuerzel_An`。
+4. 在每张项目表上选中区块（按住 Strg 可多选），按对应快捷键。
+5. 需要图例时，点一个空单元格，运行 `F_Legende`。
+6. 做完后运行 `Tastenkuerzel_Aus`，恢复 Excel 原有快捷键。
+
+## 首次使用前检查字体名
+
+宏里标题行的字体名是猜的（`Frutiger LT 45 Light`）。在创建者改好的表里点一下蓝色标题行，
+运行 `FarbeAnzeigen`，把弹窗里显示的字体名填到代码开头的 `SCHRIFT_KOPF` 里。
+
+## 注意
+
+- 宏使用工作簿的**主题颜色**；若某个工作簿主题不是 Office 默认主题，颜色看起来会不同。
+- `F_Restbudget` 把选区**最右边一列**当作金额列。
+- 只改填充色（标题行另改字体、加粗），不改数值、公式和数字格式。
