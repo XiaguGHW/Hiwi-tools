@@ -23,6 +23,12 @@ Private Const HELLER_60 As Double = 0.599993896298105   ' Excel-Wert fuer "helle
 Private Const DUNKLER_15 As Double = -0.149998474074526 ' Excel-Wert fuer "dunkler 15 %"
 Private Const MAX_ZEILE As Long = 80     ' Automatik: so weit nach unten suchen
 Private Const MAX_SPALTE As Long = 30   ' Automatik: so weit nach rechts suchen (30 = AD)
+' ---- Hilfe: Cost-Spalten in "Personal-Ressourcenplanung"
+Private Const PRP_NAME As String = "Personal-Ressourcenplanung"
+Private Const HILFE_MONATE As String = "10/2026,12/2026,01/2027,12/2027,01/2028"   ' Monat/Jahr, frei aenderbar
+Private Const HILFE_MARKE As String = "### Hilfe PRP-Spalten ###"
+Private Const HILFE_ZEILEN As Long = 18
+Private Const HILFE_SPALTEN As Long = 2
 
 Private Function AuswahlOK() As Boolean
     If TypeName(Selection) <> "Range" Then
@@ -524,3 +530,326 @@ Private Sub BerichtAusgeben(ByVal mappe As String, ByVal bericht As String)
     Next i
     wbB.Worksheets(1).Columns(1).ColumnWidth = 110
 End Sub
+
+' =====================================================================
+'  HILFE: In welcher Spalte von "Personal-Ressourcenplanung" steht die
+'  Cost-Spalte eines Monats? (zum Pruefen der SUMME-Formeln)
+'    Hilfe_PRP_AlleBlaetter  -> schreibt auf jedes Projektblatt (ab Blatt 3)
+'                               rechts neben den genutzten Bereich einen kleinen Block
+'    Hilfe_PRP_AktivesBlatt  -> nur fuer das angezeigte Blatt
+'    Hilfe_Loeschen          -> entfernt alle diese Bloecke wieder (nur Inhalte mit Marke)
+'  Es werden nur Werte geschrieben, keine Formate.
+' =====================================================================
+
+Sub Hilfe_PRP_AlleBlaetter()
+    Dim wb As Workbook, prp As Worksheet, karte As Object, i As Long, txt As String
+    Set wb = ZielMappe()
+    If wb Is Nothing Then Exit Sub
+    If Not KarteVorbereiten(wb, prp, karte) Then Exit Sub
+    For i = 3 To wb.Worksheets.Count
+        If wb.Worksheets(i).Name <> prp.Name Then
+            txt = txt & HilfeBlatt(wb.Worksheets(i), prp, karte) & vbCrLf
+        End If
+    Next i
+    MsgBox KartenText(karte) & vbCrLf & txt, vbInformation, "Hilfe PRP-Spalten"
+End Sub
+
+Sub Hilfe_PRP_AktivesBlatt()
+    Dim wb As Workbook, prp As Worksheet, karte As Object
+    Set wb = ZielMappe()
+    If wb Is Nothing Then Exit Sub
+    If Not KarteVorbereiten(wb, prp, karte) Then Exit Sub
+    If ActiveSheet.Name = prp.Name Then
+        MsgBox KartenText(karte), vbInformation, "Hilfe PRP-Spalten"
+        Exit Sub
+    End If
+    MsgBox KartenText(karte) & vbCrLf & HilfeBlatt(ActiveSheet, prp, karte), vbInformation, "Hilfe PRP-Spalten"
+End Sub
+
+Sub Hilfe_Loeschen()
+    Dim wb As Workbook, ws As Worksheet, n As Long
+    Set wb = ZielMappe()
+    If wb Is Nothing Then Exit Sub
+    For Each ws In wb.Worksheets
+        n = n + HilfeEntfernen(ws)
+    Next ws
+    MsgBox n & " Hilfe-Block/Bloecke entfernt.", vbInformation, "Hilfe PRP-Spalten"
+End Sub
+
+Private Function KarteVorbereiten(ByVal wb As Workbook, ByRef prp As Worksheet, ByRef karte As Object) As Boolean
+    Set prp = PRPBlatt(wb)
+    If prp Is Nothing Then
+        MsgBox "Blatt '" & PRP_NAME & "' nicht gefunden.", vbExclamation
+        Exit Function
+    End If
+    Set karte = MonatsKarte(prp)
+    If karte.Count = 0 Then
+        MsgBox "In '" & prp.Name & "' wurden in Zeile 1-8 keine Monatsueberschriften mit 'Cost' gefunden.", vbExclamation
+        Exit Function
+    End If
+    KarteVorbereiten = True
+End Function
+
+Private Function PRPBlatt(ByVal wb As Workbook) As Worksheet
+    Dim ws As Worksheet
+    For Each ws In wb.Worksheets
+        If LCase$(Trim$(ws.Name)) = LCase$(PRP_NAME) Then
+            Set PRPBlatt = ws
+            Exit Function
+        End If
+    Next ws
+    For Each ws In wb.Worksheets
+        If InStr(LCase$(ws.Name), "ressourcen") > 0 Then
+            Set PRPBlatt = ws
+            Exit Function
+        End If
+    Next ws
+End Function
+
+Private Function MonatsKarte(ByVal prp As Worksheet) As Object
+    ' Ergebnis: Dictionary  JJJJMM -> Spaltennummer der Cost-Spalte
+    Dim d As Object, r As Long, c As Long, lastC As Long, ym As Long, k As Long
+    Dim mCol() As Long, mRow() As Long, mYM() As Long, n As Long
+    Dim spEnde As Long, cc As Long, rr As Long, costCol As Long
+    Set d = CreateObject("Scripting.Dictionary")
+    For r = 1 To 10
+        c = prp.Cells(r, prp.Columns.Count).End(xlToLeft).Column
+        If c > lastC Then lastC = c
+    Next r
+    ReDim mCol(1 To lastC): ReDim mRow(1 To lastC): ReDim mYM(1 To lastC)
+    For c = 1 To lastC
+        For r = 1 To 8
+            ym = MonatAus(prp.Cells(r, c))
+            If ym > 0 Then
+                n = n + 1
+                mCol(n) = c: mRow(n) = r: mYM(n) = ym
+                Exit For
+            End If
+        Next r
+    Next c
+    For k = 1 To n
+        If k < n Then spEnde = mCol(k + 1) - 1 Else spEnde = mCol(k) + 2
+        costCol = 0
+        For cc = mCol(k) To spEnde
+            For rr = mRow(k) To mRow(k) + 3
+                If LCase$(TextVon(prp.Cells(rr, cc))) = "cost" Then
+                    costCol = cc
+                    Exit For
+                End If
+            Next rr
+            If costCol > 0 Then Exit For
+        Next cc
+        If costCol > 0 And Not d.Exists(mYM(k)) Then d.Add mYM(k), costCol
+    Next k
+    Set MonatsKarte = d
+End Function
+
+Private Function MonatAus(ByVal z As Range) As Long
+    ' Monatsueberschrift erkennen: Datum oder Text wie "Okt 26" / "Jan 2027"
+    Dim v As Variant, t As String, teile() As String, m As Long, j As Long
+    v = z.Value
+    If IsError(v) Or IsEmpty(v) Then Exit Function
+    If VarType(v) = vbDate Then
+        MonatAus = Year(v) * 100 + Month(v)
+        Exit Function
+    End If
+    If VarType(v) <> vbString Then Exit Function
+    t = LCase$(Trim$(Replace(Replace(CStr(v), ".", " "), "'", " ")))
+    Do While InStr(t, "  ") > 0
+        t = Replace(t, "  ", " ")
+    Loop
+    teile = Split(t, " ")
+    If UBound(teile) <> 1 Then Exit Function
+    m = MonatsNummer(teile(0))
+    If m = 0 Then Exit Function
+    If Not IsNumeric(teile(1)) Then Exit Function
+    j = CLng(teile(1))
+    If j < 100 Then j = 2000 + j
+    If j < 2000 Or j > 2100 Then Exit Function
+    MonatAus = j * 100 + m
+End Function
+
+Private Function MonatsNummer(ByVal s As String) As Long
+    Dim k As String
+    k = Left$(s, 3)
+    If Left$(k, 2) = "m" & ChrW(228) Then
+        MonatsNummer = 3
+        Exit Function
+    End If
+    Select Case k
+        Case "jan": MonatsNummer = 1
+        Case "feb": MonatsNummer = 2
+        Case "mrz", "mar", "mae": MonatsNummer = 3
+        Case "apr": MonatsNummer = 4
+        Case "mai", "may": MonatsNummer = 5
+        Case "jun": MonatsNummer = 6
+        Case "jul": MonatsNummer = 7
+        Case "aug": MonatsNummer = 8
+        Case "sep": MonatsNummer = 9
+        Case "okt", "oct": MonatsNummer = 10
+        Case "nov": MonatsNummer = 11
+        Case "dez", "dec": MonatsNummer = 12
+    End Select
+End Function
+
+Private Function MonatsText(ByVal ym As Long) As String
+    Dim namen As Variant
+    namen = Array("Jan", "Feb", "M" & ChrW(228) & "r", "Apr", "Mai", "Jun", _
+                  "Jul", "Aug", "Sep", "Okt", "Nov", "Dez")
+    MonatsText = namen((ym Mod 100) - 1) & " " & Format(ym \ 100 Mod 100, "00")
+End Function
+
+Private Function SpalteFuer(ByVal karte As Object, ByVal ym As Long) As String
+    If karte.Exists(ym) Then
+        SpalteFuer = SpName(karte(ym))
+    Else
+        SpalteFuer = "nicht gefunden"
+    End If
+End Function
+
+Private Function BereichFuer(ByVal karte As Object, ByVal ym1 As Long, ByVal ym2 As Long) As String
+    If karte.Exists(ym1) And karte.Exists(ym2) Then
+        BereichFuer = SpName(karte(ym1)) & ":" & SpName(karte(ym2))
+    Else
+        BereichFuer = "nicht gefunden"
+    End If
+End Function
+
+Private Function HilfeMonate() As Long()
+    Dim teile() As String, erg() As Long, i As Long, mj() As String
+    teile = Split(HILFE_MONATE, ",")
+    ReDim erg(0 To UBound(teile))
+    For i = 0 To UBound(teile)
+        mj = Split(Trim$(teile(i)), "/")
+        erg(i) = CLng(mj(1)) * 100 + CLng(mj(0))
+    Next i
+    HilfeMonate = erg
+End Function
+
+Private Function KartenText(ByVal karte As Object) As String
+    Dim m() As Long, i As Long, t As String
+    m = HilfeMonate()
+    t = "Cost-Spalten in '" & PRP_NAME & "':" & vbCrLf
+    For i = 0 To UBound(m)
+        t = t & "  " & MonatsText(m(i)) & " = " & SpalteFuer(karte, m(i)) & vbCrLf
+    Next i
+    KartenText = t
+End Function
+
+Private Function ProjektDatum(ByVal ws As Worksheet, ByVal muster As String) As Variant
+    ' Sucht in Zeile 1-8 eine Zelle mit dem Text (z. B. "bis" oder "laufzeit von*")
+    ' und liest das Datum darunter.
+    Dim r As Long, c As Long, k As Long, v As Variant, ziel As Range
+    Dim versatz As Variant
+    versatz = Array(0, 1, 2, -1, 3)
+    For r = 1 To 8
+        For c = 1 To MAX_SPALTE
+            If LCase$(TextVon(ws.Cells(r, c))) Like muster Then
+                For k = 0 To UBound(versatz)
+                    If c + versatz(k) >= 1 Then
+                        Set ziel = ws.Cells(r + 1, c + versatz(k))
+                        v = ziel.Value
+                        If Not IsError(v) Then
+                            If VarType(v) = vbDate Then
+                                ProjektDatum = v
+                                Exit Function
+                            ElseIf VarType(v) = vbString Then
+                                If IsDate(v) Then
+                                    ProjektDatum = CDate(v)
+                                    Exit Function
+                                End If
+                            End If
+                        End If
+                    End If
+                Next k
+            End If
+        Next c
+    Next r
+    ProjektDatum = Empty
+End Function
+
+Private Function HilfeBlatt(ByVal ws As Worksheet, ByVal prp As Worksheet, ByVal karte As Object) As String
+    Dim bis As Variant, von As Variant, ymEnde As Long, m() As Long
+    Dim lbl() As String, wert() As String, n As Long, i As Long
+    Dim s0 As Long, r As Long, c As Long, versuch As Long
+
+    If ws.ProtectContents Then
+        HilfeBlatt = "[" & ws.Name & "] uebersprungen: Blatt geschuetzt"
+        Exit Function
+    End If
+    bis = ProjektDatum(ws, "bis")
+    If IsEmpty(bis) Then
+        HilfeBlatt = "[" & ws.Name & "] uebersprungen: kein Datum unter 'bis' gefunden"
+        Exit Function
+    End If
+    von = ProjektDatum(ws, "laufzeit von*")
+    ymEnde = Year(bis) * 100 + Month(bis)
+    m = HilfeMonate()
+
+    ReDim lbl(1 To HILFE_ZEILEN): ReDim wert(1 To HILFE_ZEILEN)
+    n = 1: lbl(n) = HILFE_MARKE: wert(n) = "loeschen mit Makro Hilfe_Loeschen"
+    n = n + 1: lbl(n) = "Kosten aus Blatt": wert(n) = prp.Name
+    For i = 0 To UBound(m)
+        n = n + 1: lbl(n) = MonatsText(m(i)) & " Cost": wert(n) = SpalteFuer(karte, m(i))
+    Next i
+    If Not IsEmpty(von) Then
+        n = n + 1: lbl(n) = "Laufzeit von": wert(n) = Format(von, "dd.mm.yyyy")
+    End If
+    n = n + 1: lbl(n) = "Laufzeit bis": wert(n) = Format(bis, "dd.mm.yyyy")
+    n = n + 1: lbl(n) = "Projektende " & MonatsText(ymEnde) & " Cost": wert(n) = SpalteFuer(karte, ymEnde)
+    If UBound(m) >= 1 Then
+        n = n + 1: lbl(n) = "Bereich " & MonatsText(m(0)) & " - " & MonatsText(m(1))
+        wert(n) = BereichFuer(karte, m(0), m(1))
+    End If
+    If UBound(m) >= 3 Then
+        n = n + 1: lbl(n) = "Bereich " & MonatsText(m(2)) & " - " & MonatsText(m(3))
+        wert(n) = BereichFuer(karte, m(2), m(3))
+    End If
+    n = n + 1: lbl(n) = "Bereich " & MonatsText(m(0)) & " - Projektende"
+    If ymEnde < m(0) Then
+        wert(n) = "Projekt endet vor " & MonatsText(m(0))
+    Else
+        wert(n) = BereichFuer(karte, m(0), ymEnde)
+    End If
+    If UBound(m) >= 4 Then
+        If ymEnde >= m(4) Then
+            n = n + 1: lbl(n) = "Bereich " & MonatsText(m(4)) & " - Projektende"
+            wert(n) = BereichFuer(karte, m(4), ymEnde)
+        End If
+    End If
+
+    ' alten Block entfernen, freie Stelle rechts vom genutzten Bereich suchen
+    HilfeEntfernen ws
+    For r = 1 To 30
+        c = ws.Cells(r, ws.Columns.Count).End(xlToLeft).Column
+        If c > s0 Then s0 = c
+    Next r
+    s0 = s0 + 2
+    Do While Application.WorksheetFunction.CountA(ws.Cells(3, s0).Resize(HILFE_ZEILEN, HILFE_SPALTEN)) > 0
+        s0 = s0 + 1
+        versuch = versuch + 1
+        If versuch > 50 Then
+            HilfeBlatt = "[" & ws.Name & "] kein freier Platz gefunden"
+            Exit Function
+        End If
+    Loop
+
+    For i = 1 To n
+        ws.Cells(2 + i, s0).Value = "'" & lbl(i)
+        ws.Cells(2 + i, s0 + 1).Value = "'" & wert(i)
+    Next i
+    HilfeBlatt = "[" & ws.Name & "] Block in " & SpName(s0) & "3, Projektende " & _
+                 MonatsText(ymEnde) & " = " & SpalteFuer(karte, ymEnde)
+End Function
+
+Private Function HilfeEntfernen(ByVal ws As Worksheet) As Long
+    Dim f As Range, n As Long
+    Do
+        Set f = ws.UsedRange.Find(What:=HILFE_MARKE, LookIn:=xlValues, LookAt:=xlWhole, MatchCase:=True)
+        If f Is Nothing Then Exit Do
+        f.Resize(HILFE_ZEILEN, HILFE_SPALTEN).ClearContents
+        n = n + 1
+        If n > 20 Then Exit Do
+    Loop
+    HilfeEntfernen = n
+End Function
