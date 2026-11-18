@@ -28,7 +28,10 @@
 2. 打开 `Farben_Makros.xlsm`（出现提示条时点 “Inhalt aktivieren”），再打开要改的工作簿。
 3. **Alt+F8** 运行 `Tastenkuerzel_An`。
 4. 在每张项目表上选中区块（按住 Strg 可多选），按对应快捷键。
-5. 需要图例时，点一个空单元格，运行 `F_Legende`。
+5. 右下角的图例（Legende）：
+   - **已有图例、只改颜色**：选中图例的各行（不含 “Legende” 标题），运行 `F_LegendeNeuFaerben`，按文字自动配色。
+   - **新建或重写图例**：点图例起始单元格（如 O18），运行 `F_Legende`，按提示选择是否包含 Obligo 行。
+     顺序固定为 Budget / Restbudget →（Obligo (gebunden)）→ IST Ausgaben (gebucht) → PLAN Ausgaben (Prognose)。
 6. 做完后运行 `Tastenkuerzel_Aus`，恢复 Excel 原有快捷键。
 
 ## 首次使用前检查字体名

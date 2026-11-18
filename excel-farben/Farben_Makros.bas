@@ -97,19 +97,61 @@ End Sub
 
 ' ---------------- Legende ----------------
 Sub F_Legende()
-    ' Fuegt ab der aktiven Zelle 5 Zeilen Legende ein (z. B. Zelle O18)
-    Dim z As Range
+    ' Fuegt ab der aktiven Zelle die Legende ein (z. B. Zelle O18 unten rechts).
+    ' Reihenfolge wie in der Vorlage: Budget / Restbudget, (Obligo), IST, PLAN.
+    ' Die Zeile "Obligo" nur, wenn die Seite einen Obligo-Block hat.
+    Dim z As Range, mitObligo As Boolean, zeilen As Long, i As Long
     Set z = ActiveCell
-    If Application.WorksheetFunction.CountA(z.Resize(5, 1)) > 0 Then
-        If MsgBox("Die Zellen darunter sind nicht leer. Trotzdem ueberschreiben?", _
-                  vbYesNo + vbQuestion) = vbNo Then Exit Sub
+    mitObligo = (MsgBox("Hat diese Seite einen Obligo-Block?" & vbCrLf & _
+                        "(Ja = Zeile 'Obligo (gebunden)' in die Legende aufnehmen)", _
+                        vbYesNo + vbQuestion, "Legende") = vbYes)
+    zeilen = IIf(mitObligo, 5, 4)
+    If Application.WorksheetFunction.CountA(z.Resize(zeilen, 1)) > 0 Then
+        If MsgBox("Die Zellen sind nicht leer (z. B. alte Legende). Ueberschreiben?", _
+                  vbYesNo + vbQuestion, "Legende") = vbNo Then Exit Sub
+        z.Resize(zeilen, 1).Interior.Pattern = xlNone   ' alte Farben entfernen
     End If
     z.Value = "Legende"
     z.Font.Bold = True
-    z.Offset(1, 0).Value = "Budget / Restbudget":      Designfarbe z.Offset(1, 0), xlThemeColorAccent6
-    z.Offset(2, 0).Value = "Obligo (gebunden)":        Designfarbe z.Offset(2, 0), xlThemeColorAccent1
-    z.Offset(3, 0).Value = "IST Ausgaben (gebucht)":   Designfarbe z.Offset(3, 0), xlThemeColorAccent2
-    z.Offset(4, 0).Value = "PLAN Ausgaben (Prognose)": Designfarbe z.Offset(4, 0), xlThemeColorAccent4
+    i = 1
+    LegendenZeile z.Offset(i, 0), "Budget / Restbudget", xlThemeColorAccent6: i = i + 1
+    If mitObligo Then
+        LegendenZeile z.Offset(i, 0), "Obligo (gebunden)", xlThemeColorAccent1: i = i + 1
+    End If
+    LegendenZeile z.Offset(i, 0), "IST Ausgaben (gebucht)", xlThemeColorAccent2: i = i + 1
+    LegendenZeile z.Offset(i, 0), "PLAN Ausgaben (Prognose)", xlThemeColorAccent4
+    ' Rest einer alten, laengeren Legende entfernen (nur wenn dort wirklich Legendentext steht)
+    If Not mitObligo Then
+        If LCase$(CStr(z.Offset(zeilen, 0).Value)) Like "plan ausgaben*" Then
+            z.Offset(zeilen, 0).ClearContents
+            z.Offset(zeilen, 0).Interior.Pattern = xlNone
+        End If
+    End If
+End Sub
+
+Private Sub LegendenZeile(ByVal ziel As Range, ByVal txt As String, ByVal akzent As Long)
+    ziel.Value = txt
+    Designfarbe ziel, akzent
+End Sub
+
+Sub F_LegendeNeuFaerben()
+    ' Bestehende Legende behalten, nur die Farben anpassen:
+    ' die Zellen der Legende markieren (ohne "Legende"-Ueberschrift) und Makro starten.
+    ' Die Farbe wird anhand des Textes gewaehlt.
+    Dim c As Range, t As String
+    If Not AuswahlOK Then Exit Sub
+    For Each c In Selection.Cells
+        t = LCase$(Trim$(CStr(c.Value)))
+        If t Like "budget*" Or t Like "restbudget*" Then
+            Designfarbe c, xlThemeColorAccent6
+        ElseIf t Like "obligo*" Then
+            Designfarbe c, xlThemeColorAccent1
+        ElseIf t Like "ist*" Then
+            Designfarbe c, xlThemeColorAccent2
+        ElseIf t Like "plan*" Then
+            Designfarbe c, xlThemeColorAccent4
+        End If
+    Next c
 End Sub
 
 ' ---------------- Hilfen ----------------
