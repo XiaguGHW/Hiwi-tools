@@ -43,8 +43,9 @@
 1. **标题行**：A 列以 “Gesamtbudget” 开头的那一行 → 整行 Blau Akzent 5，Frutiger 字体，加粗。
 2. **色块**：标题行里每个标题决定它下方**原本有颜色的格子**的新颜色，一直到 A 列写 “gesamt” 的那一行
    （中间的空白行若原本无色则不动）：
-   Gesamtbudget / Gesamt… → 绿；…Obligo… → Blau Akzent 1；…PLAN… / …PLN… → Gold；…IST… / …Ausg… → 橙；
-   其他标题（如 “Verfügbares Budget”）不动，并在报告中列出。
+   …Budget… / …Mittel… / Gesamt… → 绿（Budget/Mittel 区块里**有数字的格子即使原来没颜色也涂绿**）；
+   …Obligo… → Blau Akzent 1；…PLAN… / …PLN… → Gold；…IST… / …Ausg… → 橙；
+   其他标题不动，并在报告中列出。标题行本身始终是蓝色。
 3. **gesamt 行**：整行加粗。
 4. **余额区**：gesamt 下方、A 列以 IST / PLAN / PLN / Restbudget / Projektmittel 开头的几行 →
    左侧 Weiß dunkler 15 %，第一列金额 Grün Akzent 6，全部加粗。

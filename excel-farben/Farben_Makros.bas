@@ -206,11 +206,12 @@ End Sub
 '                   -> ganze Zeile Blau Akzent 5, Schrift SCHRIFT_KOPF, fett
 '    - Bloecke    = jede Ueberschrift in der Kopfzeile bestimmt die Farbe der
 '                   BEREITS GEFAERBTEN Zellen darunter, bis einschliesslich "gesamt":
-'                     Gesamtbudget / Gesamt...  -> Gruen Akzent 6
+'                     ...Budget... / ...Mittel... / Gesamt... -> Gruen Akzent 6
+'                       (bei Budget/Mittel zusaetzlich alle Zellen mit Zahlen, auch ohne Farbe)
 '                     ...Obligo...              -> Blau Akzent 1
 '                     ...PLAN... / ...PLN...    -> Gold Akzent 4
 '                     ...IST... / ...Ausg...    -> Orange Akzent 2
-'                     sonst (z. B. "Verfuegbares Budget") -> unveraendert, im Bericht gemeldet
+'                     sonst -> unveraendert, im Bericht gemeldet
 '    - Zeile "gesamt" (Spalte A) -> fett
 '    - Restbudget = Zeilen unter "gesamt", deren Text in Spalte A mit
 '                   IST / PLAN / PLN / Restbudget / Projektmittel beginnt
@@ -318,7 +319,8 @@ Private Function BlattFormatieren(ByVal ws As Worksheet) As String
             Loop
             akz = Klasse(txt)
             If akz <> 0 Then
-                n = FaerbeGefuellte(ws.Range(ws.Cells(kopf + 1, c), ws.Cells(ges, ende)), akz)
+                n = FaerbeGefuellte(ws.Range(ws.Cells(kopf + 1, c), ws.Cells(ges, ende)), akz, _
+                                    IstBudgetTitel(LCase$(txt)))
                 r = r & "  " & SpName(c) & ":" & SpName(ende) & "  '" & txt & "' -> " & _
                     KlassenName(akz) & " (" & n & " Zellen)" & vbCrLf
             Else
@@ -423,7 +425,7 @@ End Function
 Private Function Klasse(ByVal txt As String) As Long
     Dim t As String
     t = LCase$(txt)
-    If t Like "gesamtbudget*" Then
+    If IstBudgetTitel(t) Then
         Klasse = xlThemeColorAccent6
     ElseIf InStr(t, "obligo") > 0 Then
         Klasse = xlThemeColorAccent1
@@ -448,11 +450,24 @@ Private Function KlassenName(ByVal akz As Long) As String
     End Select
 End Function
 
-Private Function FaerbeGefuellte(ByVal bereich As Range, ByVal akz As Long) As Long
-    ' Faerbt nur Zellen um, die bereits eine Fuellfarbe haben (= "Originalfarbblock")
-    Dim z As Range, n As Long
+Private Function IstBudgetTitel(ByVal t As String) As Boolean
+    ' Ueberschriften mit "Budget" oder "Mittel" (z. B. Gesamtbudget, Verfuegbares Budget 2026, Mittel 2026)
+    IstBudgetTitel = (InStr(t, "budget") > 0 Or InStr(t, "mittel") > 0)
+End Function
+
+Private Function FaerbeGefuellte(ByVal bereich As Range, ByVal akz As Long, _
+                                 Optional ByVal auchZahlen As Boolean = False) As Long
+    ' Faerbt Zellen um, die bereits eine Fuellfarbe haben (= "Originalfarbblock").
+    ' Bei Budget-Bloecken (auchZahlen = True) zusaetzlich alle Zellen mit einer Zahl.
+    Dim z As Range, n As Long, mitZahl As Boolean
     For Each z In bereich.Cells
-        If IstGefuellt(z) Then
+        mitZahl = False
+        If auchZahlen Then
+            If Not IsError(z.Value) Then
+                If Not IsEmpty(z.Value) And IsNumeric(z.Value) And VarType(z.Value) <> vbString Then mitZahl = True
+            End If
+        End If
+        If IstGefuellt(z) Or mitZahl Then
             Designfarbe z, akz
             n = n + 1
         End If
