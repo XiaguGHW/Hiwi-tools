@@ -53,6 +53,18 @@
 
 运行结束后会打开一个**新的工作簿显示报告**：每张表改了哪些区域、哪些没识别出来需要手动处理。
 
+## 辅助：查 Personal-Ressourcenplanung 的 Cost 列
+
+改 `SUMME('Personal-Ressourcenplanung'!…)` 公式时用来核对列号。
+
+- `Hilfe_PRP_AlleBlaetter`：在第 3 张起的每张项目表**已用区域右侧的空白处**写一个小块：
+  Okt 26 / Dez 26 / Jan 27 / Dez 27 / Jan 28 的 Cost 列、Laufzeit von/bis、**项目结束月的 Cost 列**，
+  以及常用区间（如 Okt 26 – Dez 26、Okt 26 – Projektende）。
+- `Hilfe_PRP_AktivesBlatt`：只处理当前表（在 Personal-Ressourcenplanung 上运行时只弹出列号）。
+- `Hilfe_Loeschen`：一键删除所有这些小块（只清空带 `### Hilfe PRP-Spalten ###` 标记的块的内容，不动格式）。
+
+月份列表可在代码开头 `HILFE_MONATE` 修改（格式 `月/年`，逗号分隔）。
+
 ## 首次使用前检查字体名
 
 宏里标题行的字体名是猜的（`Frutiger LT 45 Light`）。在创建者改好的表里点一下蓝色标题行，
