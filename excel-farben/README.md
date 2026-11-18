@@ -34,6 +34,24 @@
      顺序固定为 Budget / Restbudget →（Obligo (gebunden)）→ IST Ausgaben (gebucht) → PLAN Ausgaben (Prognose)。
 6. 做完后运行 `Tastenkuerzel_Aus`，恢复 Excel 原有快捷键。
 
+## 全自动模式（推荐先在副本上试）
+
+- `Auto_AktivesBlatt`：只处理当前显示的工作表，适合先测试。
+- `Auto_AlleProjektseiten`：处理当前工作簿**从第 3 张起**的所有工作表。
+
+识别规则：
+1. **标题行**：A 列以 “Gesamtbudget” 开头的那一行 → 整行 Blau Akzent 5，Frutiger 字体，加粗。
+2. **色块**：标题行里每个标题决定它下方**原本有颜色的格子**的新颜色，一直到 A 列写 “gesamt” 的那一行
+   （中间的空白行若原本无色则不动）：
+   Gesamtbudget / Gesamt… → 绿；…Obligo… → Blau Akzent 1；…PLAN… / …PLN… → Gold；…IST… / …Ausg… → 橙；
+   其他标题（如 “Verfügbares Budget”）不动，并在报告中列出。
+3. **gesamt 行**：整行加粗。
+4. **余额区**：gesamt 下方、A 列以 IST / PLAN / PLN / Restbudget / Projektmittel 开头的几行 →
+   左侧 Weiß dunkler 15 %，第一列金额 Grün Akzent 6，全部加粗。
+5. **图例**：找到 “Legende”，按下面各行的文字自动配色。
+
+运行结束后会打开一个**新的工作簿显示报告**：每张表改了哪些区域、哪些没识别出来需要手动处理。
+
 ## 首次使用前检查字体名
 
 宏里标题行的字体名是猜的（`Frutiger LT 45 Light`）。在创建者改好的表里点一下蓝色标题行，
