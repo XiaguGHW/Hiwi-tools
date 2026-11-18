@@ -102,8 +102,9 @@ Sub F_Legende()
     ' Die Zeile "Obligo" nur, wenn die Seite einen Obligo-Block hat.
     Dim z As Range, mitObligo As Boolean, zeilen As Long, i As Long
     Set z = ActiveCell
-    mitObligo = (MsgBox("Hat diese Seite einen Obligo-Block?" & vbCrLf & _
-                        "(Ja = Zeile 'Obligo (gebunden)' in die Legende aufnehmen)", _
+    mitObligo = (MsgBox("Legende MIT Obligo?" & vbCrLf & vbCrLf & _
+                        "Ja    = Budget / Obligo / IST / PLAN" & vbCrLf & _
+                        "Nein  = Budget / IST / PLAN", _
                         vbYesNo + vbQuestion, "Legende") = vbYes)
     zeilen = IIf(mitObligo, 5, 4)
     If Application.WorksheetFunction.CountA(z.Resize(zeilen, 1)) > 0 Then
