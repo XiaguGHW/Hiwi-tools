@@ -29,6 +29,13 @@ Private Const HILFE_MONATE As String = "10/2026,12/2026,01/2027,12/2027,01/2028"
 Private Const HILFE_MARKE As String = "### Hilfe PRP-Spalten ###"
 Private Const HILFE_ZEILEN As Long = 18
 Private Const HILFE_SPALTEN As Long = 2
+' ---- Rueckgaengig: so viele Laeufe werden gemerkt (nur solange Excel offen ist)
+Private Const MAX_LAEUFE As Long = 30
+
+Private mLaeufe As Collection        ' Stapel: je Lauf Array(Name, Zeit, Collection der Datensaetze)
+Private mAktuell As Collection       ' Datensaetze des laufenden Makros
+Private mAktuellName As String
+Private mAktuellGemerkt As Boolean
 
 Private Function AuswahlOK() As Boolean
     If TypeName(Selection) <> "Range" Then
@@ -40,6 +47,7 @@ Private Function AuswahlOK() As Boolean
 End Function
 
 Private Sub Designfarbe(ByVal ziel As Range, ByVal akzent As Long)
+    Merken ziel
     With ziel.Interior
         .Pattern = xlSolid
         .ThemeColor = akzent
@@ -49,6 +57,7 @@ End Sub
 
 Private Sub FaerbeAuswahl(ByVal akzent As Long)
     If Not AuswahlOK Then Exit Sub
+    LaufBeginnen KlassenName(akzent)
     Designfarbe Selection, akzent
 End Sub
 
@@ -56,6 +65,7 @@ End Sub
 Sub F_Kopfzeile()
     ' Zeile mit "Gesamtbudget", "IST Ausgaben", "PLAN Ausgaben 2026" ... (z. B. A9:O9)
     If Not AuswahlOK Then Exit Sub
+    LaufBeginnen "Kopfzeile"
     Designfarbe Selection, xlThemeColorAccent5
     Selection.Font.Name = SCHRIFT_KOPF
     Selection.Font.Bold = True
@@ -88,12 +98,14 @@ Sub F_Restbudget()
     ' Schrift und Zahlenformat bleiben unveraendert.
     Dim bereich As Range, n As Long
     If Not AuswahlOK Then Exit Sub
+    LaufBeginnen "Restbudget"
     For Each bereich In Selection.Areas
         n = bereich.Columns.Count
         If n < 2 Then
             MsgBox "Bitte von Spalte A bis zur Betragsspalte markieren (mind. 2 Spalten).", vbExclamation
             Exit Sub
         End If
+        Merken bereich
         With bereich.Resize(, n - 1).Interior
             .Pattern = xlSolid
             .ThemeColor = xlThemeColorDark1
@@ -108,18 +120,21 @@ Sub F_Legende()
     ' Fuegt ab der aktiven Zelle die Legende ein (z. B. Zelle O18 unten rechts).
     ' Reihenfolge wie in der Vorlage: Budget / Restbudget, (Obligo), IST, PLAN.
     ' Die Zeile "Obligo" nur, wenn die Seite einen Obligo-Block hat.
-    Dim z As Range, mitObligo As Boolean, zeilen As Long, i As Long
+    Dim z As Range, mitObligo As Boolean, zeilen As Long, i As Long, warBelegt As Boolean
     Set z = ActiveCell
     mitObligo = (MsgBox("Legende MIT Obligo?" & vbCrLf & vbCrLf & _
                         "Ja    = Budget / Obligo / IST / PLAN" & vbCrLf & _
                         "Nein  = Budget / IST / PLAN", _
                         vbYesNo + vbQuestion, "Legende") = vbYes)
     zeilen = IIf(mitObligo, 5, 4)
-    If Application.WorksheetFunction.CountA(z.Resize(zeilen, 1)) > 0 Then
+    warBelegt = (Application.WorksheetFunction.CountA(z.Resize(zeilen, 1)) > 0)
+    If warBelegt Then
         If MsgBox("Die Zellen sind nicht leer (z. B. alte Legende). Ueberschreiben?", _
                   vbYesNo + vbQuestion, "Legende") = vbNo Then Exit Sub
-        z.Resize(zeilen, 1).Interior.Pattern = xlNone   ' alte Farben entfernen
     End If
+    LaufBeginnen "Legende"
+    Merken z.Resize(zeilen + 1, 1), True
+    If warBelegt Then z.Resize(zeilen, 1).Interior.Pattern = xlNone   ' alte Farben entfernen
     z.Value = "Legende"
     z.Font.Bold = True
     i = 1
@@ -149,6 +164,7 @@ Sub F_LegendeNeuFaerben()
     ' Die Farbe wird anhand des Textes gewaehlt.
     Dim c As Range, t As String
     If Not AuswahlOK Then Exit Sub
+    LaufBeginnen "Legende neu faerben"
     For Each c In Selection.Cells
         t = LCase$(Trim$(CStr(c.Value)))
         If t Like "budget*" Or t Like "restbudget*" Then
@@ -188,13 +204,15 @@ Sub Tastenkuerzel_An()
     Application.OnKey "^+I", p & "F_IST"
     Application.OnKey "^+P", p & "F_PLAN"
     Application.OnKey "^+R", p & "F_Restbudget"
+    Application.OnKey "^+Z", p & "Rueckgaengig_LetzterLauf"
     MsgBox "Tastenkuerzel aktiv:" & vbCrLf & _
            "Strg+Umschalt+K  Kopfzeile (Blau Akzent 5, Frutiger, fett)" & vbCrLf & _
            "Strg+Umschalt+B  Budget (Gruen Akzent 6)" & vbCrLf & _
            "Strg+Umschalt+O  Obligo (Blau Akzent 1)" & vbCrLf & _
            "Strg+Umschalt+I  IST (Orange Akzent 2)" & vbCrLf & _
            "Strg+Umschalt+P  PLAN (Gold Akzent 4)" & vbCrLf & _
-           "Strg+Umschalt+R  IST-Vorjahre bis Projektende (grau + Betraege gruen)", vbInformation
+           "Strg+Umschalt+R  IST-Vorjahre bis Projektende (grau + Betraege gruen)" & vbCrLf & _
+           "Strg+Umschalt+Z  letzten Lauf rueckgaengig machen", vbInformation
 End Sub
 
 Sub Tastenkuerzel_Aus()
@@ -204,6 +222,7 @@ Sub Tastenkuerzel_Aus()
     Application.OnKey "^+I"
     Application.OnKey "^+P"
     Application.OnKey "^+R"
+    Application.OnKey "^+Z"
 End Sub
 
 ' =====================================================================
@@ -238,6 +257,7 @@ Sub Auto_AktivesBlatt()
     End If
     sicherung = SicherungAnlegen(wb)
     If Len(sicherung) = 0 Then Exit Sub
+    LaufBeginnen "Automatik: " & ActiveSheet.Name
     BerichtAusgeben wb.Name, "Sicherungskopie: " & sicherung & vbCrLf & vbCrLf & _
                     BlattFormatieren(ActiveSheet)
 End Sub
@@ -279,6 +299,7 @@ Sub Auto_AlleProjektseiten()
 
     sicherung = SicherungAnlegen(wb)
     If Len(sicherung) = 0 Then Exit Sub
+    LaufBeginnen "Automatik: alle Projektseiten in " & wb.Name
 
     On Error GoTo Fehler
     Application.ScreenUpdating = False
@@ -429,6 +450,7 @@ Private Function BlattFormatieren(ByVal ws As Worksheet) As String
     Loop
 
     ' Zeile "gesamt" fett
+    Merken ws.Range(ws.Cells(ges, 1), ws.Cells(ges, letzte))
     ws.Range(ws.Cells(ges, 1), ws.Cells(ges, letzte)).Font.Bold = True
     r = r & "  Zeile 'gesamt': " & ges & " fett" & vbCrLf
 
@@ -468,6 +490,7 @@ Private Function RestbudgetFormatieren(ByVal ws As Worksheet, ByVal ges As Long)
         Exit Function
     End If
 
+    Merken ws.Range(ws.Cells(erste, 1), ws.Cells(letzteZ, wertSp))
     With ws.Range(ws.Cells(erste, 1), ws.Cells(letzteZ, wertSp - 1)).Interior
         .Pattern = xlSolid
         .ThemeColor = xlThemeColorDark1
@@ -942,3 +965,126 @@ Private Function HilfeEntfernen(ByVal ws As Worksheet) As Long
     Loop
     HilfeEntfernen = n
 End Function
+
+' =====================================================================
+'  RUECKGAENGIG (mehrstufig)
+'    Jedes Farb-Makro merkt sich vor dem Aendern Farbe, Schrift und Fett
+'    jeder betroffenen Zelle (bei der Legende auch den Inhalt).
+'    Rueckgaengig_LetzterLauf  -> stellt den letzten Lauf wieder her;
+'                                 nochmal ausfuehren = vorletzter Lauf usw.
+'    Rueckgaengig_Liste        -> zeigt, welche Laeufe gemerkt sind
+'  Die Liste geht verloren, wenn Excel geschlossen wird oder der VBA-Code
+'  zurueckgesetzt wird (z. B. Code bearbeitet, Fehlermeldung mit "Beenden").
+' =====================================================================
+
+Sub Rueckgaengig_LetzterLauf()
+    Dim lauf As Variant, recs As Collection, i As Long, fehler As Long
+    If mLaeufe Is Nothing Then GoTo Leer
+    If mLaeufe.Count = 0 Then GoTo Leer
+    lauf = mLaeufe(mLaeufe.Count)
+    Set recs = lauf(2)
+    If MsgBox("Rueckgaengig machen:" & vbCrLf & "  " & lauf(0) & vbCrLf & _
+              "  (" & Format(lauf(1), "hh:nn:ss") & " Uhr, " & recs.Count & " Zellaenderungen)" & vbCrLf & vbCrLf & _
+              "Danach noch " & (mLaeufe.Count - 1) & " weitere Lauf/Laeufe rueckgaengig machbar." & vbCrLf & _
+              "Fortfahren?", vbYesNo + vbQuestion, "Rueckgaengig") = vbNo Then Exit Sub
+
+    Application.ScreenUpdating = False
+    On Error Resume Next
+    For i = recs.Count To 1 Step -1
+        Err.Clear
+        Wiederherstellen recs(i)
+        If Err.Number <> 0 Then fehler = fehler + 1
+    Next i
+    On Error GoTo 0
+    Application.ScreenUpdating = True
+    mLaeufe.Remove mLaeufe.Count
+    Set mAktuell = Nothing
+
+    MsgBox "Rueckgaengig gemacht: " & lauf(0) & vbCrLf & _
+           IIf(fehler > 0, fehler & " Zelle(n) konnten nicht wiederhergestellt werden " & _
+               "(z. B. Datei geschlossen oder Blatt umbenannt)." & vbCrLf, "") & _
+           "Noch " & mLaeufe.Count & " Lauf/Laeufe in der Liste.", vbInformation, "Rueckgaengig"
+    Exit Sub
+Leer:
+    MsgBox "Nichts zum Rueckgaengigmachen." & vbCrLf & _
+           "(Die Liste ist leer, z. B. nach Neustart von Excel oder nach Aenderungen am VBA-Code.)", _
+           vbInformation, "Rueckgaengig"
+End Sub
+
+Sub Rueckgaengig_Liste()
+    Dim i As Long, t As String, lauf As Variant
+    If mLaeufe Is Nothing Then
+        MsgBox "Keine Laeufe gemerkt.", vbInformation, "Rueckgaengig"
+        Exit Sub
+    End If
+    If mLaeufe.Count = 0 Then
+        MsgBox "Keine Laeufe gemerkt.", vbInformation, "Rueckgaengig"
+        Exit Sub
+    End If
+    For i = mLaeufe.Count To 1 Step -1
+        lauf = mLaeufe(i)
+        t = t & (mLaeufe.Count - i + 1) & ". " & Format(lauf(1), "hh:nn:ss") & "  " & lauf(0) & vbCrLf
+        If Len(t) > 900 Then Exit For
+    Next i
+    MsgBox "Gemerkte Laeufe (1 = wird als naechstes rueckgaengig gemacht):" & vbCrLf & vbCrLf & t, _
+           vbInformation, "Rueckgaengig"
+End Sub
+
+Private Sub LaufBeginnen(ByVal bezeichnung As String)
+    Set mAktuell = New Collection
+    mAktuellName = bezeichnung
+    mAktuellGemerkt = False
+End Sub
+
+Private Sub Merken(ByVal rng As Range, Optional ByVal mitWert As Boolean = False)
+    Dim z As Range
+    If mAktuell Is Nothing Then LaufBeginnen "Aenderung"
+    If Not mAktuellGemerkt Then
+        If mLaeufe Is Nothing Then Set mLaeufe = New Collection
+        mLaeufe.Add Array(mAktuellName, Now, mAktuell)
+        mAktuellGemerkt = True
+        Do While mLaeufe.Count > MAX_LAEUFE
+            mLaeufe.Remove 1
+        Loop
+    End If
+    For Each z In rng.Cells
+        mAktuell.Add Datensatz(z, mitWert)
+    Next z
+End Sub
+
+Private Function Datensatz(ByVal z As Range, ByVal mitWert As Boolean) As Variant
+    Dim tc As Long, tint As Double, f As String
+    tc = 0
+    On Error Resume Next
+    tc = z.Interior.ThemeColor
+    If Err.Number <> 0 Then tc = 0
+    Err.Clear
+    tint = z.Interior.TintAndShade
+    Err.Clear
+    On Error GoTo 0
+    If mitWert Then f = z.Formula
+    Datensatz = Array(z.Worksheet.Parent.Name, z.Worksheet.Name, z.Address, _
+                      z.Interior.Pattern, z.Interior.Color, tc, tint, _
+                      z.Font.Name, z.Font.Bold, mitWert, f)
+End Function
+
+Private Sub Wiederherstellen(ByVal d As Variant)
+    Dim z As Range
+    Set z = Workbooks(d(0)).Worksheets(d(1)).Range(d(2))
+    With z.Interior
+        If d(3) = xlNone Then
+            .Pattern = xlNone
+        Else
+            .Pattern = d(3)
+            If d(5) > 0 Then
+                .ThemeColor = d(5)
+                .TintAndShade = d(6)
+            Else
+                .Color = d(4)
+            End If
+        End If
+    End With
+    If Not IsNull(d(7)) Then z.Font.Name = d(7)
+    If Not IsNull(d(8)) Then z.Font.Bold = d(8)
+    If d(9) Then z.Formula = d(10)
+End Sub
