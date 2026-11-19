@@ -53,6 +53,12 @@
 
 运行结束后会打开一个**新的工作簿显示报告**：每张表改了哪些区域、哪些没识别出来需要手动处理。
 
+**安全措施**
+- **自动备份**：`Auto_AktivesBlatt` / `Auto_AlleProjektseiten` 在改任何东西之前，先在同一文件夹存一份副本
+  `<文件名>_vor_Farben_<日期_时间>.xlsx`（当前状态，含未保存的修改）。备份失败则不做任何修改。
+- **只处理项目页**：必须同时满足 ① A1（或 A2）以 “Projektbericht” 开头 ② A 列有 “Gesamtbudget” 行
+  ③ 其下有 “gesamt” 行 ④ 工作表未保护。`Auto_AlleProjektseiten` 运行前会列出“将处理 / 将跳过（及原因）”供确认。
+
 ## 辅助：查 Personal-Ressourcenplanung 的 Cost 列
 
 改 `SUMME('Personal-Ressourcenplanung'!…)` 公式时用来核对列号。

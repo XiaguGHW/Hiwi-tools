@@ -228,42 +228,131 @@ End Sub
 
 Sub Auto_AktivesBlatt()
     ' Zum Testen: nur das gerade angezeigte Blatt bearbeiten
-    Dim wb As Workbook
+    Dim wb As Workbook, grund As String, sicherung As String
     Set wb = ZielMappe()
     If wb Is Nothing Then Exit Sub
-    BerichtAusgeben wb.Name, BlattFormatieren(ActiveSheet)
+    If Not IstProjektseite(ActiveSheet, grund) Then
+        MsgBox "Blatt '" & ActiveSheet.Name & "' ist keine Projektseite:" & vbCrLf & grund & _
+               vbCrLf & vbCrLf & "Es wurde nichts geaendert.", vbExclamation, "Automatisch faerben"
+        Exit Sub
+    End If
+    sicherung = SicherungAnlegen(wb)
+    If Len(sicherung) = 0 Then Exit Sub
+    BerichtAusgeben wb.Name, "Sicherungskopie: " & sicherung & vbCrLf & vbCrLf & _
+                    BlattFormatieren(ActiveSheet)
 End Sub
 
 Sub Auto_AlleProjektseiten()
-    ' Bearbeitet alle Blaetter ab dem 3. Blatt der aktiven Arbeitsmappe
-    Dim wb As Workbook, i As Long, liste As String, bericht As String
+    ' Bearbeitet alle PROJEKTSEITEN ab dem 3. Blatt der aktiven Arbeitsmappe.
+    ' Projektseite = A1/A2 beginnt mit "Projektbericht", es gibt eine Zeile
+    ' "Gesamtbudget" und darunter eine Zeile "gesamt" in Spalte A.
+    Dim wb As Workbook, i As Long, ja As String, nein As String, grund As String
+    Dim bericht As String, sicherung As String, anzahl As Long
+    Dim auswahl() As Boolean
     Set wb = ZielMappe()
     If wb Is Nothing Then Exit Sub
     If wb.Worksheets.Count < 3 Then
         MsgBox "Diese Arbeitsmappe hat weniger als 3 Blaetter.", vbExclamation
         Exit Sub
     End If
+
+    ReDim auswahl(1 To wb.Worksheets.Count)
     For i = 3 To wb.Worksheets.Count
-        liste = liste & "  " & wb.Worksheets(i).Name & vbCrLf
+        If IstProjektseite(wb.Worksheets(i), grund) Then
+            auswahl(i) = True
+            anzahl = anzahl + 1
+            ja = ja & "  " & wb.Worksheets(i).Name & vbCrLf
+        Else
+            nein = nein & "  " & wb.Worksheets(i).Name & "  (" & grund & ")" & vbCrLf
+        End If
     Next i
+    If anzahl = 0 Then
+        MsgBox "Ab Blatt 3 wurde keine Projektseite gefunden. Es wurde nichts geaendert." & _
+               vbCrLf & vbCrLf & Left$(nein, 800), vbExclamation, "Automatisch faerben"
+        Exit Sub
+    End If
     If MsgBox("Arbeitsmappe: " & wb.Name & vbCrLf & vbCrLf & _
-              "Folgende Blaetter werden bearbeitet:" & vbCrLf & liste & vbCrLf & _
-              "Haben Sie eine Sicherungskopie? (Kein Rueckgaengig moeglich)", _
+              "WIRD BEARBEITET (" & anzahl & "):" & vbCrLf & Left$(ja, 450) & vbCrLf & _
+              "WIRD UEBERSPRUNGEN:" & vbCrLf & IIf(Len(nein) = 0, "  (keine)" & vbCrLf, Left$(nein, 350)) & vbCrLf & _
+              "Vorher wird automatisch eine Sicherungskopie gespeichert. Fortfahren?", _
               vbYesNo + vbQuestion, "Automatisch faerben") = vbNo Then Exit Sub
+
+    sicherung = SicherungAnlegen(wb)
+    If Len(sicherung) = 0 Then Exit Sub
 
     On Error GoTo Fehler
     Application.ScreenUpdating = False
     For i = 3 To wb.Worksheets.Count
-        bericht = bericht & BlattFormatieren(wb.Worksheets(i)) & vbCrLf
+        If auswahl(i) Then bericht = bericht & BlattFormatieren(wb.Worksheets(i)) & vbCrLf
     Next i
     Application.ScreenUpdating = True
-    BerichtAusgeben wb.Name, bericht
+    BerichtAusgeben wb.Name, "Sicherungskopie: " & sicherung & vbCrLf & vbCrLf & bericht & _
+                    IIf(Len(nein) > 0, "Nicht bearbeitet (keine Projektseite):" & vbCrLf & nein, "")
     Exit Sub
 Fehler:
     Application.ScreenUpdating = True
     MsgBox "Fehler bei Blatt " & i & ": " & Err.Description & vbCrLf & _
-           "Bisher bearbeitet:" & vbCrLf & Left$(bericht, 700), vbCritical
+           "Sicherungskopie: " & sicherung & vbCrLf & _
+           "Bisher bearbeitet:" & vbCrLf & Left$(bericht, 600), vbCritical
 End Sub
+
+Private Function IstProjektseite(ByVal ws As Worksheet, ByRef grund As String) As Boolean
+    Dim kopf As Long
+    grund = ""
+    If Not (LCase$(TextVon(ws.Range("A1"))) Like "projektbericht*" Or _
+            LCase$(TextVon(ws.Range("A2"))) Like "projektbericht*") Then
+        grund = "kein 'Projektbericht' in A1"
+        Exit Function
+    End If
+    kopf = FindeZeileA(ws, 4, MAX_ZEILE, "gesamtbudget*")
+    If kopf = 0 Then
+        grund = "keine Zeile 'Gesamtbudget' in Spalte A"
+        Exit Function
+    End If
+    If FindeZeileA(ws, kopf + 1, kopf + 20, "gesamt") = 0 Then
+        grund = "keine Zeile 'gesamt' unter 'Gesamtbudget'"
+        Exit Function
+    End If
+    If ws.ProtectContents Then
+        grund = "Blatt ist geschuetzt"
+        Exit Function
+    End If
+    IstProjektseite = True
+End Function
+
+Private Function SicherungAnlegen(ByVal wb As Workbook) As String
+    ' Speichert eine Kopie (aktueller Stand) im selben Ordner; die offene Datei bleibt unveraendert.
+    ' Rueckgabe: Pfad der Kopie, oder "" wenn es nicht geklappt hat (dann wird nichts gefaerbt).
+    Dim basis As String, endung As String, p As String, pos As Long, ziel As String
+    If Len(wb.Path) = 0 Then
+        MsgBox "Die Datei wurde noch nie gespeichert, daher kann keine Sicherungskopie angelegt werden." & _
+               vbCrLf & "Bitte zuerst speichern. Es wurde nichts geaendert.", vbExclamation, "Sicherungskopie"
+        Exit Function
+    End If
+    pos = InStrRev(wb.Name, ".")
+    If pos > 0 Then
+        basis = Left$(wb.Name, pos - 1)
+        endung = Mid$(wb.Name, pos)
+    Else
+        basis = wb.Name
+        endung = ".xlsx"
+    End If
+    If InStr(wb.Path, "/") > 0 And InStr(wb.Path, "\") = 0 Then
+        p = wb.Path & "/"
+    Else
+        p = wb.Path & Application.PathSeparator
+    End If
+    ziel = p & basis & "_vor_Farben_" & Format(Now, "yyyymmdd_hhnnss") & endung
+    On Error Resume Next
+    wb.SaveCopyAs ziel
+    If Err.Number <> 0 Then
+        MsgBox "Sicherungskopie konnte nicht gespeichert werden:" & vbCrLf & Err.Description & _
+               vbCrLf & vbCrLf & "Ziel: " & ziel & vbCrLf & "Es wurde nichts geaendert.", vbCritical, "Sicherungskopie"
+        Exit Function
+    End If
+    On Error GoTo 0
+    SicherungAnlegen = ziel
+End Function
 
 Private Function ZielMappe() As Workbook
     Dim wb As Workbook
